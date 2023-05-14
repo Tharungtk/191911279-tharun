@@ -1,0 +1,453 @@
+# necessary imports 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import classification_report
+from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import zero_one_loss
+from sklearn.model_selection import train_test_split
+import warnings
+warnings.filterwarnings('ignore')
+
+plt.style.use('fivethirtyeight')
+%matplotlib inline
+pd.set_option('display.max_columns', 26)
+
+df=pd.read_csv('/content/drive/MyDrive/leukocyte/data.csv')
+
+# show some of dataset just first columns
+df.head(10)
+
+# show shape of dataset
+df.shape
+
+# describe the dataset
+df.describe().style.background_gradient(cmap = 'copper')
+
+# show information a bout data
+df.info()
+
+# dropping id column
+df.drop('id', axis = 1, inplace = True)
+
+# to understand the columns of dataset we can renam the data and set orignal names
+# rename column names to make it more user-friendly
+
+df.columns = ['age', 'blood_pressure', 'specific_gravity', 'albumin', 'sugar', 'red_blood_cells', 'pus_cell',
+              'pus_cell_clumps', 'bacteria', 'blood_glucose_random', 'blood_urea', 'serum_creatinine', 'sodium',
+              'potassium', 'haemoglobin', 'packed_cell_volume', 'white_blood_cell_count', 'red_blood_cell_count',
+              'hypertension', 'diabetes_mellitus', 'coronary_artery_disease', 'appetite', 'peda_edema',
+              'aanemia', 'class']
+
+df.head(10)
+
+# converting necessary columns to numerical type 
+df['packed_cell_volume'] = pd.to_numeric(df['packed_cell_volume'], errors='coerce')
+df['white_blood_cell_count'] = pd.to_numeric(df['white_blood_cell_count'], errors='coerce')
+df['red_blood_cell_count'] = pd.to_numeric(df['red_blood_cell_count'], errors='coerce')
+
+# make a replace for incorect value 
+
+df['diabetes_mellitus'].replace(to_replace = {'\tno':'no','\tyes':'yes',' yes':'yes'},inplace=True)
+
+df['coronary_artery_disease'] = df['coronary_artery_disease'].replace(to_replace = '\tno', value='no')
+
+df['class'] = df['class'].replace(to_replace = {'ckd\t': 'ckd', 'notckd': 'not ckd'})
+
+### change the ckd to 0 and the not ckd 1 that is numeric value
+
+df['class'] = df['class'].map({'ckd': 0, 'not ckd': 1})
+df['class'] = pd.to_numeric(df['class'], errors='coerce')
+
+cols = ['diabetes_mellitus', 'coronary_artery_disease', 'class']
+
+for col in cols:
+    print(f"{col} has {df[col].unique()} values\n")
+
+# Extracting categorical and numerical columns
+
+cat_cols = [col for col in df.columns if df[col].dtype == 'object']
+num_cols = [col for col in df.columns if df[col].dtype != 'object']
+
+# looking at unique values in categorical columns
+
+for col in cat_cols:
+    print(f"{col} has {df[col].unique()} values\n")
+
+# checking numerical features distribution
+plt.figure(figsize = (20, 15))
+plotnumber = 1
+for column in num_cols:
+    if plotnumber <= 14:
+        ax = plt.subplot(3, 5, plotnumber)
+        sns.distplot(df[column],color='red',)
+        plt.xlabel(column)
+    
+        
+    plotnumber += 1
+
+plt.tight_layout()
+plt.show()
+
+# looking at categorical columns
+
+plt.figure(figsize = (20, 15))
+plotnumber = 1
+for column in cat_cols:
+    if plotnumber <= 11:
+        ax = plt.subplot(3, 4, plotnumber)
+        sns.countplot(df[column], palette = 'rocket',color='black')
+        plt.xlabel(column)
+        
+    plotnumber += 1
+
+plt.tight_layout()
+plt.show()
+
+
+# Calculation the crro
+cor=df.corr()
+sns.heatmap(cor, annot = True, linewidths = 1, linecolor = 'lightgrey')
+
+px.scatter(df, x="age", y="blood_pressure", color="class")
+
+px.scatter(df, x="age", y="sugar", color="class")
+
+px.scatter(df, x="age", y="haemoglobin", color="class", marginal_y="violin", marginal_x="box")
+
+px.scatter(df, x="age", y="bacteria", color="class", marginal_y="violin", marginal_x="box")
+
+px.violin(df, y="age", x="sugar", color="class", box=True, points="all")
+
+px.scatter_3d(df, x='age', y='hypertension', z='sugar', color='class')
+
+# checking for null values and correct it
+
+df.isna().sum().sort_values(ascending = False)
+
+df[num_cols].isnull().sum()
+
+df[cat_cols].isnull().sum()
+
+def random_value_imputation(feature):
+    random_sample = df[feature].dropna().sample(df[feature].isna().sum())
+    random_sample.index = df[df[feature].isnull()].index
+    df.loc[df[feature].isnull(), feature] = random_sample
+    
+def impute_mode(feature):
+    mode = df[feature].mode()[0]
+    df[feature] = df[feature].fillna(mode)
+
+# filling num_cols null values using random sampling method
+
+for col in num_cols:
+    random_value_imputation(col)
+df[num_cols].isnull().sum()
+
+# filling "red_blood_cells" and "pus_cell" using random sampling method and rest of cat_cols using mode imputation
+
+random_value_imputation('red_blood_cells')
+random_value_imputation('pus_cell')
+
+for col in cat_cols:
+    impute_mode(col)
+df[cat_cols].isnull().sum()
+
+for col in cat_cols:
+    print(f"{col} has {df[col].nunique()} categories\n")
+
+from sklearn.preprocessing import LabelEncoder
+
+le = LabelEncoder()
+
+for col in cat_cols:
+    df[col] = le.fit_transform(df[col])
+
+df.head()
+
+df.columns
+
+# data splitting in X,y
+x = df[['age','blood_pressure','sugar','diabetes_mellitus','aanemia','hypertension']]
+y = df['class']
+
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.20, random_state=42)
+
+print("Length of classes",len(list(X_train.columns)))
+print(list(X_train.columns))
+
+print("The shape of X_train",X_train.shape)
+print("The shape of X_test",X_test.shape)
+print("The shape of X_train",y_train.shape)
+print("The shape of X_test",y_test.shape)
+
+# Fitting Random Forest Classification to the Training set
+from sklearn.ensemble import RandomForestClassifier
+classifier = RandomForestClassifier(n_estimators = 10, criterion = 'entropy', random_state = 0)
+classifier.fit(X_train, y_train)
+
+# Predicting the Test set results
+y_pred = classifier.predict(X_test)
+y_pred[:10]
+
+print('model_DT Train Score is : ' , classifier.score(X_train, y_train))
+print('model_DT Test Score is : ' , classifier.score(X_test, y_test))
+
+print("The Score is: ",accuracy_score(y_test , y_pred)*100)
+
+#probability of all values
+pr1 = classifier.predict_proba(X_test)[0:10,:]
+pr1[:2]
+
+#probability of zeros
+pr2 = classifier.predict_proba(X_test)[0:10,0]
+pr2[:2]
+
+#probability of ones
+pr3 = classifier.predict_proba(X_test)[0:10,1]
+pr3[:2]
+
+#  Confusion Matrix
+from sklearn.metrics import confusion_matrix
+cm1 = confusion_matrix(y_test, y_pred)
+
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+disp = ConfusionMatrixDisplay(confusion_matrix=cm1,display_labels=classifier.classes_)
+disp.plot()
+plt.show()
+
+# mean_absolute_error
+from sklearn.metrics import mean_absolute_error
+meanabs =mean_absolute_error(y_test, y_pred)
+# mean_squared_error
+from sklearn.metrics import mean_squared_error
+meansq =mean_squared_error(y_test, y_pred)
+# median_absolute_error
+from sklearn.metrics import median_absolute_error
+medianab =median_absolute_error(y_test, y_pred)
+
+print("The mean_absolute_error",meanabs)
+print("The mean_Squre_error",meansq)
+print("The Medain_absolute_error",medianab)
+
+import pickle
+pickle.dump(classifier, open("modeRandomForest.pkl", "wb"))
+
+from sklearn.tree import DecisionTreeClassifier
+# Creating model object
+model_dt = DecisionTreeClassifier( )
+# Training Model
+model_dt.fit(X_train,y_train)
+
+# Making Prediction
+pred_dt = model_dt.predict(X_test)
+
+print('model_DT Train Score is : ' , model_dt.score(X_train, y_train))
+print('model_DT Test Score is : ' , model_dt.score(X_test, y_test))
+
+print('this accuracy ' , accuracy_score(y_test , pred_dt))
+
+from sklearn.metrics import plot_confusion_matrix
+# Confusion Matrix
+from sklearn.metrics import confusion_matrix
+cm2 = confusion_matrix(y_test, pred_dt)
+
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+disp = ConfusionMatrixDisplay(confusion_matrix=cm2,display_labels=model_dt.classes_)
+disp.plot()
+plt.show()
+
+# mean_absolute_error
+from sklearn.metrics import mean_absolute_error
+meanabs =mean_absolute_error(y_test, pred_dt)
+# mean_squared_error
+from sklearn.metrics import mean_squared_error
+meansq =mean_squared_error(y_test, pred_dt)
+# median_absolute_error
+from sklearn.metrics import median_absolute_error
+medianab =median_absolute_error(y_test, pred_dt)
+
+print("The mean_absolute_error",meanabs)
+print("The mean_Squre_error",meansq)
+print("The Medain_absolute_error",medianab)
+
+from sklearn.metrics import confusion_matrix,classification_report,plot_confusion_matrix #for model evaluation
+confusion_matrix2=confusion_matrix(y_test,pred_dt)
+confusion_matrix2
+
+total=sum(sum(confusion_matrix2))
+
+sensitivity = confusion_matrix2[0,0]/(confusion_matrix2[0,0]+confusion_matrix2[1,0])
+print('Sensitivity : ', sensitivity )
+
+specificity = confusion_matrix2[1,1]/(confusion_matrix2[1,1]+confusion_matrix2[0,1])
+print('Specificity : ', specificity)
+
+total=sum(sum(confusion_matrix2))
+
+ppv = confusion_matrix2[0,0]/(confusion_matrix2[0,0]+confusion_matrix2[0,1])
+print('ppv : ', ppv )
+
+npv = confusion_matrix2[1,1]/(confusion_matrix2[1,0]+confusion_matrix2[1,1])
+print('npv : ', npv)
+
+from sklearn.metrics import roc_curve, auc #for model evaluation
+from matplotlib import pyplot
+fig, (ax2) = plt.subplots(figsize = (8,6))
+        #roc-curve
+fpr, tpr, thresholds_roc = roc_curve(y_test,pred_dt)
+roc_auc = auc(fpr,tpr)
+ax2.plot(fpr,tpr, label = " AUROC = {:0.2f}".format(roc_auc))
+ax2.plot([0,1], [0,1], 'r', linestyle = "--", lw = 2)
+ax2.set_xlabel("False Positive Rate", fontsize = 14)
+ax2.set_ylabel("True Positive Rate", fontsize = 14)
+ax2.set_title("ROC Curve", fontsize = 18)
+ax2.legend(loc = 'best')
+plt.title('ROC curve for Decision Tree Classifier ')
+plt.xlabel('False Positive Rate (1 - Specificity)')
+plt.ylabel('True Positive Rate (Sensitivity)')
+        #find default threshold
+close_default = np.argmin(np.abs(thresholds_roc - 0.5))
+ax2.plot(fpr[close_default], tpr[close_default], 'o', markersize = 8)
+plt.tight_layout()
+
+from xgboost import XGBClassifier
+from sklearn import metrics
+# Creating model object
+model_xgb = XGBClassifier()
+model_xgb.fit(X_train, y_train)
+
+pred_xgb= model_xgb.predict(X_test)
+
+print('model_xgb Train Score is : ' , model_xgb.score(X_train, y_train))
+print('model_xgb Test Score is : ' , model_xgb.score(X_test, y_test))
+
+import pickle
+pickle.dump(model_xgb, open("modeXGBoost.pkl", "wb"))
+
+import matplotlib
+from sklearn.metrics import confusion_matrix,classification_report,plot_confusion_matrix
+matplotlib.rcParams['figure.figsize'] = (8,5)
+plot_confusion_matrix(model_xgb,X_test,y_test);
+
+from sklearn.metrics import confusion_matrix,classification_report,plot_confusion_matrix #for model evaluation
+confusion_matrix=confusion_matrix(y_test,pred_xgb)
+confusion_matrix
+
+total=sum(sum(confusion_matrix))
+
+sensitivity = confusion_matrix[0,0]/(confusion_matrix[0,0]+confusion_matrix[1,0])
+print('Sensitivity : ', sensitivity )
+
+specificity = confusion_matrix[1,1]/(confusion_matrix[1,1]+confusion_matrix[0,1])
+print('Specificity : ', specificity)
+
+total=sum(sum(confusion_matrix))
+
+ppv = confusion_matrix[0,0]/(confusion_matrix[0,0]+confusion_matrix[0,1])
+print('ppv : ', ppv )
+
+npv = confusion_matrix[1,1]/(confusion_matrix[1,0]+confusion_matrix[1,1])
+print('npv : ', npv)
+
+from sklearn.metrics import roc_curve, auc #for model evaluation
+from matplotlib import pyplot
+fig, (ax2) = plt.subplots(figsize = (8,6))
+        #roc-curve
+fpr, tpr, thresholds_roc = roc_curve(y_test,pred_xgb)
+roc_auc = auc(fpr,tpr)
+ax2.plot(fpr,tpr, label = " AUROC = {:0.2f}".format(roc_auc))
+ax2.plot([0,1], [0,1], 'r', linestyle = "--", lw = 2)
+ax2.set_xlabel("False Positive Rate", fontsize = 14)
+ax2.set_ylabel("True Positive Rate", fontsize = 14)
+ax2.set_title("ROC Curve", fontsize = 18)
+ax2.legend(loc = 'best')
+plt.title('ROC curve for XgBoost Classifier')
+plt.xlabel('False Positive Rate (1 - Specificity)')
+plt.ylabel('True Positive Rate (Sensitivity)')
+        #find default threshold
+close_default = np.argmin(np.abs(thresholds_roc - 0.5))
+ax2.plot(fpr[close_default], tpr[close_default], 'o', markersize = 8)
+plt.tight_layout()
+
+cols_to_use = ['age', 'blood_pressure', 'specific_gravity', 'albumin', 'sugar',
+       'red_blood_cells', 'pus_cell', 'pus_cell_clumps', 'bacteria',
+       'blood_glucose_random', 'blood_urea', 'serum_creatinine', 'sodium',
+       'potassium', 'haemoglobin', 'packed_cell_volume',
+       'white_blood_cell_count', 'red_blood_cell_count', 'hypertension',
+       'diabetes_mellitus', 'coronary_artery_disease', 'appetite',
+       'peda_edema', 'aanemia']
+
+train_X, test_X, train_y, test_y = train_test_split(x, y)
+
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import make_pipeline
+my_pipeline = make_pipeline(imputer, RandomForestRegressor())
+
+my_pipeline.fit(train_X, train_y)
+predictions = my_pipeline.predict(test_X)
+
+
+print('model_xgb Train Score is : ' , my_pipeline.score(X_train, y_train))
+print('model_xgb Test Score is : ' , my_pipeline.score(X_test, y_test))
+
+Level-Set comparison with Active contour
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+ac = [96.76,90.21]
+plt.style.use('ggplot')
+x = ['Level-Set comparison', 'Active contour']
+ax = sns.barplot(x, ac)
+ax.set_title('Accuracy Comparison')
+ax.set_ylabel('Accuracy')
+ax.set_ylim(94,94)
+
+Improving Jaccard Index during Leukocyte Extraction in in Histology Slides with Watershed Segmentation Compared to Level-Set 
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+ac = [96.76,90.59]
+plt.style.use('ggplot')
+x = ['Jaccard Index', ' Watershed Segmentation Compared to Level-Set']
+ax = sns.barplot(x, ac)
+ax.set_title('Accuracy Comparison')
+ax.set_ylabel('Accuracy')
+ax.set_ylim(94,94)
+
+Accurate Segmentation of Blood Cell Section in Thresholded image with Chan-Vese compared to Level Set
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+ac = [96.76,93.44]
+plt.style.use('ggplot')
+x = ['Accurate Segmentation of Blood Cell Section Chan-Vese', 'Level Set']
+ax = sns.barplot(x, ac)
+ax.set_title('Accuracy Comparison')
+ax.set_ylabel('Accuracy')
+ax.set_ylim(94,94)
+
+Improving accuracy with automatic segmentation of leukocyte compared with semi automatic scheme.
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+ac = [96.76,94.48]
+plt.style.use('ggplot')
+x = ['automatic segmentation', 'semi automatic scheme.']
+ax = sns.barplot(x, ac)
+ax.set_title('Accuracy Comparison')
+ax.set_ylabel('Accuracy')
+ax.set_ylim(94,94)
